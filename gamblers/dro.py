@@ -23,11 +23,14 @@ STATES = np.arange(GOAL + 1)
 # probability of head
 HEAD_PROB = 0.6
 
-def fn_b(p, b, svp, svn, radius=0.1):
+radius = 0.02
+
+
+def fn_b(p, b, svp, svn):
     return b * np.log(p * np.exp(-svp/b) + (1-p) * np.exp(-svn/b)) + b * radius
 
 
-def tri_search(p, svp, svn, radius=0.1, b_max=10.):
+def tri_search(p, svp, svn, b_max=100.):
     b_min = 1e-3
     f1 = 0
     f2 = 1
@@ -35,8 +38,8 @@ def tri_search(p, svp, svn, radius=0.1, b_max=10.):
     while (np.abs(f1-f2) > 1e-5):
         b1 = (b_min + b_max) / 2
         b2 = (b1 + b_max) / 2
-        f1 = fn_b(p, b1, svp, svn, radius=radius)
-        f2 = fn_b(p, b2, svp, svn, radius=radius)
+        f1 = fn_b(p, b1, svp, svn)
+        f2 = fn_b(p, b2, svp, svn)
         if f1 < f2:
             b_max = b2
         else:
@@ -45,7 +48,7 @@ def tri_search(p, svp, svn, radius=0.1, b_max=10.):
     return f1
 
 
-def newton_grad(p, b, svp, svn, radius=0.02):
+def newton_grad(p, b, svp, svn):
     """
     Args:
         p: probability of head up
@@ -75,16 +78,16 @@ def newton_grad(p, b, svp, svn, radius=0.02):
     return f_b, f_1, f_2
 
 
-def newton(p, b, svp, svn, radius=0.02, epsilon=1e-5, b_min=1e-6):
+def newton(p, b, svp, svn, epsilon=1e-5, b_min=1e-6):
     count = 0
     while(True):
         count = count + 1
-        f_b, f_1, f_2 = newton_grad(p, b, svp, svn, radius=radius)
+        f_b, f_1, f_2 = newton_grad(p, b, svp, svn)
         if np.abs(f_1) <= epsilon:
             return f_b, f_2
         else:
             if np.abs(f_2) < epsilon:
-                return fn_b(p, b-f_1, svp, svn, radius=radius), f_2
+                return fn_b(p, b-f_1, svp, svn), f_2
             else:
                 b = np.maximum(b_min, b - f_1 / f_2)
         
@@ -102,7 +105,6 @@ def figure_4_3():
 
     # value iteration
     beta0 = 10.
-    radius = 0.02
     while True:
         old_state_value = state_value.copy()
         sweeps_history.append(old_state_value)
@@ -134,17 +136,17 @@ def figure_4_3():
                 if svp + svn <= 0:
                     action_return = sv_std
                 else:
-                    action_return = -tri_search(HEAD_PROB, svp, svn, radius=radius)
+                    action_return = -tri_search(HEAD_PROB, svp, svn)
                 action_returns.append(action_return)
 
             new_value = np.max(action_returns)
             state_value[state] = new_value
         delta = abs(state_value - old_state_value).max()
-        if delta < 1e-5:
+        if delta < 1e-9:
             sweeps_history.append(state_value)
             break
 
-    # print("value iteration done!")
+    print("value iteration done!")
 
     # compute the optimal policy
     policy = np.zeros(GOAL + 1)
@@ -152,14 +154,24 @@ def figure_4_3():
         actions = np.arange(min(state, GOAL - state) + 1)
         action_returns = []
         for action in actions:
-            action_returns.append(
-                HEAD_PROB * state_value[state + action] + (1 - HEAD_PROB) * state_value[state - action])
+            svp = state_value[state + action]
+            svn = state_value[state - action]
+            sv_std = HEAD_PROB * svp + (1 - HEAD_PROB) * svn
+            if svp + svn <= 0:
+                action_return = sv_std
+            else:
+                action_return = -tri_search(HEAD_PROB, svp, svn)
+            action_returns.append(action_return)
 
         # round to resemble the figure in the book, see
         # https://github.com/ShangtongZhang/reinforcement-learning-an-introduction/issues/83
         policy[state] = actions[np.argmax(np.round(action_returns[1:], 5)) + 1]
 
-    # print("optimal policy extraction done!")
+    print("optimal policy extraction done!")
+
+    # save policy
+    filename = "dro_policy/policy_{}.npy".format(HEAD_PROB)
+    np.save(filename, policy)
 
     if eval_policy:
         evaluate(policy)
@@ -185,12 +197,11 @@ def figure_4_3():
 
 
 def evaluate(policy):
-    n_game = 10000
+    n_game = 1000
     init_state = 50
     Goal = 100
-    p_head = 0.5
+    p_head = 0.65
     n_win = 0
-    import pdb; pdb.set_trace()
     for i in range(10):
         for j in range(1, 100):
             # state = init_state

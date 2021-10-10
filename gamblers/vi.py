@@ -21,7 +21,7 @@ GOAL = 100
 STATES = np.arange(GOAL + 1)
 
 # probability of head
-HEAD_PROB = 0.49
+HEAD_PROB = 0.6
 
 
 def figure_4_3():
@@ -67,6 +67,10 @@ def figure_4_3():
         # https://github.com/ShangtongZhang/reinforcement-learning-an-introduction/issues/83
         policy[state] = actions[np.argmax(np.round(action_returns[1:], 5)) + 1]
 
+    # save policy
+    filename = "vi_policy/policy_{}.npy".format(HEAD_PROB)
+    np.save(filename, policy)
+
     if eval_policy:
         evaluate(policy)
         print("policy evaluation done!")
@@ -94,7 +98,7 @@ def evaluate(policy):
     n_game = 10000
     init_state = 50
     Goal = 100
-    p_head = 0.39
+    p_head = 0.55
     n_win = 0
     for i in range(10):
         for j in range(1, 100):
